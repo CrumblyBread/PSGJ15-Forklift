@@ -4,22 +4,49 @@ using UnityEngine;
 
 public class PlayerController : MonoBehaviour
 {
+    [HideInInspector]public static PlayerController instance;
     public GameObject cam;
     public Rigidbody rb;
+    public bool hasHelmet;
+    public GameObject flashlight;
     public float moveSpeed;
     public float clampAngle;
     public float sensitivity = 300f;
     [Header("Constraints")]
     public bool canMove;
     public bool canLook;
-    void Start()
-    {
-        
+    private void Awake() {
+        if (instance == null)
+        {
+            instance = this;
+        }
+        else if (instance != this)
+        {
+            Debug.Log("Instance already exists, destroying object!");
+            Destroy(this);
+        }
     }
 
     private void FixedUpdate() {
         Move();
         Look();
+        //TODO: move to update?
+        if(Input.GetKeyDown(KeyCode.E)){
+            RaycastHit hitInfo;
+            if(Physics.Raycast(cam.transform.position,cam.transform.forward,out hitInfo,1.5f)){
+                if(hitInfo.transform.gameObject.GetComponent<ForkliftController>() != null){
+                    hitInfo.transform.gameObject.GetComponent<ForkliftController>().GetIn();
+                    return;
+                }
+                if(hitInfo.transform.gameObject.GetComponent<Interactable>() != null){
+                    hitInfo.transform.gameObject.GetComponent<Interactable>().Interact();
+                    return;
+                }
+            }
+        }
+        if(Input.GetKeyDown(KeyCode.F)){
+            flashlight.SetActive(!flashlight.activeSelf);
+        }
     }
     
     private void Move(){

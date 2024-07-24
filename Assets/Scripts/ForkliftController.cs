@@ -8,7 +8,7 @@ using UnityEngine;
 
 public class ForkliftController : MonoBehaviour
 {
-    public bool isOcupied;
+    private bool isOcupied;
     [Header("Inputs")]
     [SerializeField]
     private float throttleInput;
@@ -32,7 +32,7 @@ public class ForkliftController : MonoBehaviour
     [SerializeField]
     private float forkHeight;
     public float forkliftPower;
-    private float reverse;
+    private float reverse = 1;
 
     public WheelCollider[] colliders;
     public GameObject[] meshes;
@@ -40,6 +40,8 @@ public class ForkliftController : MonoBehaviour
     public GameObject plate;
     public GameObject[] forks;
     public GameObject cam;
+    public GameObject hardhat;
+    public GameObject frontLights;
     public float sensitivity;
 
     private float clampAngle = 85;
@@ -47,7 +49,9 @@ public class ForkliftController : MonoBehaviour
     private float horizontalRotation;
     [SerializeField]
     private GameObject steeringWheel;
+    public GameObject exitPoint;
     void Update(){
+
         for (int i = 0; i < colliders.Length; i++){
             colliders[i].GetWorldPose(out Vector3 pos, out Quaternion rot);
             meshes[i].transform.position = pos;
@@ -56,7 +60,19 @@ public class ForkliftController : MonoBehaviour
             colliders[i].motorTorque = 0;
         }
 
-        if(!isOcupied){return;}
+        frontLights.SetActive(isOcupied);
+
+        /*if(Mathf.Abs(transform.rotation.x) > 0.01f){
+            transform.SetPositionAndRotation(transform.position,Quaternion.Euler(0f,transform.rotation.y,transform.rotation.z));
+        }
+
+        if(Mathf.Abs(transform.rotation.z) > 0.01f){
+            transform.SetPositionAndRotation(transform.position,Quaternion.Euler(transform.rotation.x,transform.rotation.y,0f));
+        }*/
+
+        if(!isOcupied){
+            return;
+        }
 
         throttleInput = Mathf.Lerp(throttleInput,Input.GetAxis("Vertical"), Time.deltaTime * 10);
         throttleInput = Mathf.Clamp(throttleInput,0,1);
@@ -66,25 +82,29 @@ public class ForkliftController : MonoBehaviour
         steeringInput = Mathf.Lerp(steeringInput,Input.GetAxis("Horizontal"), Time.deltaTime*7);
 
         if(Input.GetKey(KeyCode.LeftShift)){
-            heightInput += Time.deltaTime;
+            heightInput += 0.66f*Time.deltaTime;
             heightInput = Mathf.Clamp(heightInput,0,1);
             plate.transform.localPosition = new Vector3(0f,-1.297538f,0.5903233f + (heightInput * 1.8776767f));
+            UIManager.instance.forkHeightIndicator(heightInput);
         }
         if(Input.GetKey(KeyCode.Space)){
-            heightInput -= Time.deltaTime;
+            heightInput -= 0.66f*Time.deltaTime;
             heightInput = Mathf.Clamp(heightInput,0,1);
             plate.transform.localPosition = new Vector3(0f,-1.297538f,0.5903233f + heightInput * 1.8776767f);
+            UIManager.instance.forkHeightIndicator(heightInput);
         }
 
         if(Input.GetButton("Fire1")){
             tiltInput += 2*Time.deltaTime;
             tiltInput = Mathf.Clamp(tiltInput,-1,1);
             pillars.transform.localRotation = Quaternion.Euler(5.5f*tiltInput,0,0);
+            UIManager.instance.forkHTiltIndicator(tiltInput);
         }
         if(Input.GetButton("Fire2")){
             tiltInput -= 2*Time.deltaTime;
             tiltInput = Mathf.Clamp(tiltInput,-1,1);
             pillars.transform.localRotation = Quaternion.Euler(5.5f*tiltInput,0,0);
+            UIManager.instance.forkHTiltIndicator(tiltInput);
         }
 
         if(Input.GetKey(KeyCode.R)){
@@ -94,6 +114,7 @@ public class ForkliftController : MonoBehaviour
                 float x = i%2==0? 1f:-1f;
                 forks[i].transform.localPosition = new Vector3(distanceInput * 0.44f * x,0f,0f);
             }
+            UIManager.instance.forkDistanceIndicator(distanceInput);
         }
         if(Input.GetKey(KeyCode.F)){
             distanceInput -= Time.deltaTime;
@@ -102,15 +123,21 @@ public class ForkliftController : MonoBehaviour
                 float x = i%2==0? 1f:-1f;
                 forks[i].transform.localPosition = new Vector3(distanceInput * 0.44f * x,0f,0f);
             }
+            UIManager.instance.forkDistanceIndicator(distanceInput);
+        }
+
+        if(Input.GetKeyDown(KeyCode.Tab)){
+            if(reverse < 0){reverse = 1;UIManager.instance.ForkliftReverser(true);return;}
+            if(reverse > 0){reverse = -1;UIManager.instance.ForkliftReverser(false); return;}
         }
 
 
 
-        colliders[colliders.Length-1].motorTorque = throttleInput*forkliftPower;
-        colliders[colliders.Length-1].steerAngle = -steeringInput * 45f;
+        colliders[colliders.Length-1].motorTorque = throttleInput*forkliftPower * reverse;
+        colliders[colliders.Length-1].steerAngle = -steeringInput * 15f;
 
         for (int i = 0; i < colliders.Length; i++){
-            colliders[i].brakeTorque = (-brakeInput) * 300;
+            colliders[i].brakeTorque = -brakeInput;
             if(brakeInput > 0.9f){
                 colliders[i].motorTorque = 0;
             }
@@ -129,5 +156,30 @@ public class ForkliftController : MonoBehaviour
 
         cam.transform.localRotation = Quaternion.Euler(verticalRotation, horizontalRotation, 0f); 
 
+        if(Input.GetKeyDown(KeyCode.E)){
+            GetOut();
+        }
+
+    }
+
+    public void GetIn(){
+        Invoke("GI",0.1f);
+    }
+    public void GI(){
+        isOcupied = true;
+        cam.SetActive(true);
+        PlayerController.instance.gameObject.SetActive(false);
+        hardhat.SetActive(PlayerController.instance.hasHelmet);
+        UIManager.instance.GetIntoForklift();
+
+    }
+
+    public void GetOut(){
+        isOcupied = false;
+        cam.SetActive(false);
+        PlayerController.instance.gameObject.SetActive(true);
+        hardhat.SetActive(false);
+        PlayerController.instance.gameObject.transform.SetPositionAndRotation(exitPoint.transform.position,exitPoint.transform.rotation);
+        UIManager.instance.GetOutForklift();
     }
 }
